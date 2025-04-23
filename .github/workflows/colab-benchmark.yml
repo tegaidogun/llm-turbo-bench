@@ -73,8 +73,35 @@ jobs:
            },
            "outputs": [],
            "source": [
-            "!git clone https://github.com/${{ github.repository }}.git\n",
-            "!cd llm-turbo-bench && pip install -r requirements.txt"
+            "import os\n",
+            "import sys\n",
+            "import subprocess\n",
+            "\n",
+            "def run_command(command):\n",
+            "    try:\n",
+            "        result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)\n",
+            "        print(result.stdout)\n",
+            "        return True\n",
+            "    except subprocess.CalledProcessError as e:\n",
+            "        print(f\"Error: {e.stderr}\", file=sys.stderr)\n",
+            "        return False\n",
+            "\n",
+            "# First, download the repository as a ZIP file\n",
+            "repo_url = \"https://github.com/${{ github.repository }}/archive/refs/heads/main.zip\"\n",
+            "if not run_command(f\"wget {repo_url} -O repo.zip\"):\n",
+            "    raise Exception(\"Failed to download repository\")\n",
+            "\n",
+            "# Extract the ZIP file\n",
+            "if not run_command(\"unzip repo.zip\"):\n",
+            "    raise Exception(\"Failed to extract repository\")\n",
+            "\n",
+            "# Move into the repository directory\n",
+            "repo_dir = \"${{ github.repository.split('/')[1] }}-main\"\n",
+            "os.chdir(repo_dir)\n",
+            "\n",
+            "# Install dependencies\n",
+            "if not run_command(\"pip install -r requirements.txt\"):\n",
+            "    raise Exception(\"Failed to install dependencies\")"
            ]
           },
           {
@@ -86,13 +113,27 @@ jobs:
            "outputs": [],
            "source": [
             "import os\n",
-            "os.chdir('llm-turbo-bench')\n",
-            "!python src/main.py \\\n",
+            "import subprocess\n",
+            "import sys\n",
+            "\n",
+            "def run_command(command):\n",
+            "    try:\n",
+            "        result = subprocess.run(command, shell=True, check=True, text=True, capture_output=True)\n",
+            "        print(result.stdout)\n",
+            "        return True\n",
+            "    except subprocess.CalledProcessError as e:\n",
+            "        print(f\"Error: {e.stderr}\", file=sys.stderr)\n",
+            "        return False\n",
+            "\n",
+            "benchmark_command = f\"\"\"python src/main.py \\\n",
             "  --model ${{ github.event.inputs.model || 'facebook/opt-6.7b' }} \\\n",
             "  --backend ${{ github.event.inputs.backend || 'pytorch' }} \\\n",
             "  --batch-sizes ${{ github.event.inputs.batch_sizes || '1 2 4' }} \\\n",
             "  --precisions ${{ github.event.inputs.precisions || 'fp16' }} \\\n",
-            "  --output-dir results"
+            "  --output-dir results\"\"\"\n",
+            "\n",
+            "if not run_command(benchmark_command):\n",
+            "    raise Exception(\"Benchmark failed\")"
            ]
           },
           {
@@ -105,8 +146,20 @@ jobs:
            "source": [
             "from google.colab import files\n",
             "import shutil\n",
-            "shutil.make_archive('results', 'zip', 'results')\n",
-            "files.download('results.zip')"
+            "import os\n",
+            "\n",
+            "try:\n",
+            "    # Create results directory if it doesn't exist\n",
+            "    os.makedirs('results', exist_ok=True)\n",
+            "    \n",
+            "    # Create ZIP archive\n",
+            "    shutil.make_archive('results', 'zip', 'results')\n",
+            "    \n",
+            "    # Download the results\n",
+            "    files.download('results.zip')\n",
+            "    print(\"Results downloaded successfully\")\n",
+            "except Exception as e:\n",
+            "    print(f\"Error downloading results: {e}\")"
            ]
           }
          ],
