@@ -1,0 +1,45 @@
+benchmark:
+  model_name: "facebook/opt-6.7b"
+  backend: "both"
+  num_runs: 20
+  prompt: "Hello, how are you?"
+  max_length: 128
+  batch_sizes: [1, 2, 4, 8, 16]
+  precision: "fp16"
+  device: "cuda"
+  warmup_runs: 3
+  gpu_monitor_interval: 0.1
+  output_dir: "results"
+  save_raw_data: true
+  generate_plots: true
+
+model:
+  max_batch_size: 16
+  max_input_len: 512
+  max_output_len: 128
+  use_cache: true
+  trust_remote_code: false
+  low_cpu_mem_usage: true
+  quantization_config: null
+
+visualization:
+  plot_style: "seaborn"
+  figure_size: [10, 6]
+  moving_average_window: 5
+  save_format: "png"
+  dpi: 300
+  interactive: false
+
+monitoring:
+  monitor_gpu: true
+  monitor_memory: true
+  monitor_power: false
+  monitor_temperature: true
+  sampling_interval: 0.1
+
+logging:
+  log_file: "results/benchmark.log"
+  console_level: "INFO"
+  file_level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S" 
