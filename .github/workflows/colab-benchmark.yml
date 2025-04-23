@@ -1,0 +1,144 @@
+name: Colab GPU Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Model to benchmark'
+        required: true
+        default: 'facebook/opt-6.7b'
+      backend:
+        description: 'Backend to use'
+        required: true
+        default: 'pytorch'
+        type: choice
+        options:
+          - pytorch
+          - tensorrt
+          - both
+      batch_sizes:
+        description: 'Batch sizes to test (space-separated)'
+        required: false
+        default: '1 2 4'
+      precisions:
+        description: 'Precisions to test (space-separated)'
+        required: false
+        default: 'fp16'
+        type: choice
+        options:
+          - fp16
+          - int8
+          - fp16 int8
+
+jobs:
+  setup-colab:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Create Colab Notebook
+      run: |
+        mkdir -p notebooks
+        cat > notebooks/benchmark.ipynb << 'EOL'
+        {
+         "cells": [
+          {
+           "cell_type": "markdown",
+           "metadata": {
+            "id": "instructions"
+           },
+           "source": [
+            "# LLM Turbo Benchmark\n",
+            "\n",
+            "This notebook will run the benchmark with the following configuration:\n",
+            "- Model: ${{ github.event.inputs.model || 'facebook/opt-6.7b' }}\n",
+            "- Backend: ${{ github.event.inputs.backend || 'pytorch' }}\n",
+            "- Batch Sizes: ${{ github.event.inputs.batch_sizes || '1 2 4' }}\n",
+            "- Precisions: ${{ github.event.inputs.precisions || 'fp16' }}\n",
+            "\n",
+            "## Instructions\n",
+            "1. Run each cell in sequence\n",
+            "2. Wait for each cell to complete before running the next\n",
+            "3. Download results when complete"
+           ]
+          },
+          {
+           "cell_type": "code",
+           "execution_count": null,
+           "metadata": {
+            "colab": {
+             "base_uri": "https://localhost:8080/"
+            },
+            "id": "setup"
+           },
+           "outputs": [],
+           "source": [
+            "!git clone https://github.com/${{ github.repository }}.git\n",
+            "!cd llm-turbo-bench && pip install -r requirements.txt"
+           ]
+          },
+          {
+           "cell_type": "code",
+           "execution_count": null,
+           "metadata": {
+            "id": "benchmark"
+           },
+           "outputs": [],
+           "source": [
+            "import os\n",
+            "os.chdir('llm-turbo-bench')\n",
+            "!python src/main.py \\\n",
+            "  --model ${{ github.event.inputs.model || 'facebook/opt-6.7b' }} \\\n",
+            "  --backend ${{ github.event.inputs.backend || 'pytorch' }} \\\n",
+            "  --batch-sizes ${{ github.event.inputs.batch_sizes || '1 2 4' }} \\\n",
+            "  --precisions ${{ github.event.inputs.precisions || 'fp16' }} \\\n",
+            "  --output-dir results"
+           ]
+          },
+          {
+           "cell_type": "code",
+           "execution_count": null,
+           "metadata": {
+            "id": "upload"
+           },
+           "outputs": [],
+           "source": [
+            "from google.colab import files\n",
+            "import shutil\n",
+            "shutil.make_archive('results', 'zip', 'results')\n",
+            "files.download('results.zip')"
+           ]
+          }
+         ],
+         "metadata": {
+          "colab": {
+           "provenance": []
+          },
+          "kernelspec": {
+           "display_name": "Python 3",
+           "name": "python3"
+          }
+         },
+         "nbformat": 4,
+         "nbformat_minor": 0
+        }
+        EOL
+
+    - name: Upload Notebook
+      uses: actions/upload-artifact@v4
+      with:
+        name: colab-notebook
+        path: notebooks/benchmark.ipynb
+        retention-days: 1
+
+  notify:
+    needs: setup-colab
+    runs-on: ubuntu-latest
+    steps:
+    - name: Notify User
+      run: |
+        echo "Benchmark notebook has been generated. Please:"
+        echo "1. Download the notebook from the artifacts"
+        echo "2. Upload it to Google Colab (https://colab.research.google.com)"
+        echo "3. Run the cells in sequence"
+        echo "4. Download the results when complete" 

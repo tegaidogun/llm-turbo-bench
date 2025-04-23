@@ -1,4 +1,4 @@
-name: LLM Turbo Benchmark
+name: Self-Hosted GPU Runner
 
 on:
   workflow_dispatch:
@@ -16,25 +16,13 @@ on:
           - pytorch
           - tensorrt
           - both
-      batch_sizes:
-        description: 'Batch sizes to test (space-separated)'
-        required: false
-        default: '1 2 4'
-      precisions:
-        description: 'Precisions to test (space-separated)'
-        required: false
-        default: 'fp16'
-        type: choice
-        options:
-          - fp16
-          - int8
-          - fp16 int8
 
 jobs:
   benchmark:
-    runs-on: ubuntu-24.04
+    runs-on: self-hosted
     container:
-      image: python:3.8-slim
+      image: nvcr.io/nvidia/pytorch:24.03-py3
+      options: --gpus all
 
     steps:
     - uses: actions/checkout@v3
@@ -55,10 +43,7 @@ jobs:
         python src/main.py \
           --model ${{ github.event.inputs.model || 'facebook/opt-6.7b' }} \
           --backend ${{ github.event.inputs.backend || 'pytorch' }} \
-          --batch-sizes ${{ github.event.inputs.batch_sizes || '1 2 4' }} \
-          --precisions ${{ github.event.inputs.precisions || 'fp16' }} \
-          --output-dir results \
-          --device cpu
+          --output-dir results
 
     - name: Upload results
       uses: actions/upload-artifact@v4
