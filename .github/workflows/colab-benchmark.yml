@@ -73,8 +73,22 @@ jobs:
            },
            "outputs": [],
            "source": [
+            "# Install system dependencies\n",
+            "!apt-get update\n",
+            "!apt-get install -y python3-pip python3-dev\n",
+            "\n",
+            "# Clone repository\n",
             "!git clone https://github.com/${{ github.repository }}.git\n",
-            "!cd llm-turbo-bench && pip install -r requirements.txt"
+            "\n",
+            "# Install Python dependencies\n",
+            "!cd llm-turbo-bench && pip install -r requirements.txt\n",
+            "\n",
+            "# Check GPU availability\n",
+            "import torch\n",
+            "print(f\"CUDA available: {torch.cuda.is_available()}\")\n",
+            "if torch.cuda.is_available():\n",
+            "    print(f\"GPU: {torch.cuda.get_device_name(0)}\")\n",
+            "    print(f\"CUDA version: {torch.version.cuda}\")"
            ]
           },
           {
@@ -86,10 +100,33 @@ jobs:
            "outputs": [],
            "source": [
             "import os\n",
+            "import sys\n",
+            "from pathlib import Path\n",
+            "\n",
+            "# Change to project directory\n",
             "os.chdir('llm-turbo-bench')\n",
+            "\n",
+            "# Check if TensorRT is available\n",
+            "try:\n",
+            "    import tensorrt\n",
+            "    tensorrt_available = True\n",
+            "except ImportError:\n",
+            "    tensorrt_available = False\n",
+            "    print(\"TensorRT not available, will use PyTorch backend only\")\n",
+            "\n",
+            "# Determine backend to use\n",
+            "backend = \"${{ github.event.inputs.backend || 'pytorch' }}\"\n",
+            "if backend == \"tensorrt\" and not tensorrt_available:\n",
+            "    print(\"TensorRT backend requested but not available. Falling back to PyTorch.\")\n",
+            "    backend = \"pytorch\"\n",
+            "elif backend == \"both\" and not tensorrt_available:\n",
+            "    print(\"TensorRT backend requested but not available. Using PyTorch only.\")\n",
+            "    backend = \"pytorch\"\n",
+            "\n",
+            "# Run benchmark\n",
             "!python src/main.py \\\n",
             "  --model ${{ github.event.inputs.model || 'facebook/opt-6.7b' }} \\\n",
-            "  --backend ${{ github.event.inputs.backend || 'pytorch' }} \\\n",
+            "  --backend {backend} \\\n",
             "  --batch-sizes ${{ github.event.inputs.batch_sizes || '1 2 4' }} \\\n",
             "  --precisions ${{ github.event.inputs.precisions || 'fp16' }} \\\n",
             "  --output-dir results"
@@ -105,8 +142,14 @@ jobs:
            "source": [
             "from google.colab import files\n",
             "import shutil\n",
-            "shutil.make_archive('results', 'zip', 'results')\n",
-            "files.download('results.zip')"
+            "import os\n",
+            "\n",
+            "# Check if results directory exists\n",
+            "if os.path.exists('results'):\n",
+            "    shutil.make_archive('results', 'zip', 'results')\n",
+            "    files.download('results.zip')\n",
+            "else:\n",
+            "    print(\"No results directory found. Benchmark may have failed.\")"
            ]
           }
          ],
@@ -141,4 +184,7 @@ jobs:
         echo "1. Download the notebook from the artifacts"
         echo "2. Upload it to Google Colab (https://colab.research.google.com)"
         echo "3. Run the cells in sequence"
-        echo "4. Download the results when complete" 
+        echo "4. Download the results when complete"
+        echo ""
+        echo "Note: TensorRT may not be available in Colab. The notebook will automatically"
+        echo "fall back to PyTorch if TensorRT is not available." 
