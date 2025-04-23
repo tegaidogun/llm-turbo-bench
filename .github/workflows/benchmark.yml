@@ -1,37 +1,68 @@
-name: Benchmark
+name: LLM Turbo Benchmark
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Model to benchmark'
+        required: true
+        default: 'facebook/opt-6.7b'
+      backend:
+        description: 'Backend to use'
+        required: true
+        default: 'pytorch'
+        type: choice
+        options:
+          - pytorch
+          - tensorrt
+          - both
 
 jobs:
   benchmark:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
-      image: nvcr.io/nvidia/pytorch:25.03-py3
+      image: nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu24.04
       options: --gpus all
 
     steps:
     - uses: actions/checkout@v3
 
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+        cache: 'pip'
+
     - name: Install dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
 
     - name: Run benchmark
       run: |
         python src/main.py \
-          --model facebook/opt-6.7b \
-          --backend both \
-          --batch-sizes 1 2 \
-          --precisions fp16
+          --model ${{ github.event.inputs.model || 'facebook/opt-6.7b' }} \
+          --backend ${{ github.event.inputs.backend || 'pytorch' }} \
+          --output-dir results
 
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
+    - name: Upload results
+      uses: actions/upload-artifact@v4
       with:
         name: benchmark-results
-        path: |
-          results/*.yaml
-          results/plots/*.png 
+        path: results/
+        retention-days: 5
+
+    - name: Generate report
+      run: |
+        python scripts/generate_report.py --input-dir results --output-dir reports
+
+    - name: Upload report
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-report
+        path: reports/
+        retention-days: 5 
